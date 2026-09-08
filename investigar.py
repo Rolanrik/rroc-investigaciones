@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """Investigacion nocturna de Rroc via Groq. Solo stdlib."""
-import json, os, urllib.request, datetime, glob
+import json, os, urllib.request, urllib.error, datetime, glob
 
 API = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = "openai/gpt-oss-120b"
 KEY = os.environ.get("GROQ_API_KEY", "")
 if not KEY:
     raise SystemExit("Falta el secret GROQ_API_KEY")
+print("DIAG largo_clave=%d empieza_gsk=%s espacios=%s" % (
+    len(KEY.strip()), KEY.strip().startswith("gsk_"),
+    (KEY != KEY.strip())))
+KEY = KEY.strip()
 
 hoy = datetime.date.today().isoformat()
 existentes = sorted(glob.glob("resultados/*.md"))
@@ -31,8 +35,13 @@ payload = json.dumps({
 }).encode()
 req = urllib.request.Request(API, data=payload,
     headers={"Authorization": "Bearer " + KEY, "Content-Type": "application/json"})
-with urllib.request.urlopen(req, timeout=600) as r:
-    d = json.load(r)
+try:
+    with urllib.request.urlopen(req, timeout=600) as r:
+        d = json.load(r)
+except urllib.error.HTTPError as e:
+    cuerpo = e.read(600).decode("utf-8", "replace")
+    print("DIAG http=%s cuerpo=%s" % (e.code, cuerpo[:400]))
+    raise SystemExit("Groq devolvio HTTP %s" % e.code)
 texto = d["choices"][0]["message"]["content"]
 uso = d.get("usage", {})
 
